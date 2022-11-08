@@ -1,50 +1,26 @@
 import numpy as np
-from scipy.integrate import solve_ivp
+import matplotlib.pyplot as plt
 
 from robot import Robot2R
+from controller import Controller, ComputedTorqueController
+from simulation import Simulation
 from visualization import animate, plot_solution
 
-def controller(t, x, robot):
-    q = x[:2]
-    
-    setpoint = np.array([[-np.pi/2], [0]])
-    error = setpoint - np.atleast_2d(q).T
-
-    P_gains = np.diag([5, 5])
-
-    control_input = (P_gains @ error)*0
-    return control_input
-
-def feedback_linearization(x, robot):
-    q, qd = x[:2], x[2:]
-    G, C = robot._G(q), robot._C(q, qd)
-    M = robot._M(q)
-
-    setpoint = np.array([0.1, 0.2])
-    error = np.atleast_2d(setpoint - q)
-    return 500*error + G.T + C.T
-
-def robot2R_dynamics_sim(t_span, y0, robot):
-    def _sim(t, state):
-        # control
-        control = controller(t, state, robot)
-
-        # plant
-        q, qd = state[:2], state[2:]
-        qdd = robot.forward_dynamics(q, qd, control)
-        return np.concatenate((qd, qdd.T[0]))
-
-    return solve_ivp(_sim, t_span, y0, dense_output=True)
 
 if __name__ == '__main__':
     robot = Robot2R(1, 1, 1, 1)
+    #control = Controller()
+    control = ComputedTorqueController(5)
 
-    t_span = [0, 10]
-    y0 =  np.array([0, 0, 0, 0])
-    
-    # simulate robot
-    #sol = solve_ivp(robot2R_sim, t_span, y0, dense_output=True, args=[robot])
+    # create trajectory
+    q1, q2 = lambda t: 2*np.pi/10*t, lambda t: 2*np.pi/5*t
+    q1d, q2d  =  lambda t: 2*np.pi/10, lambda t: 2*np.pi/5 
+    q1dd, q2dd = lambda t: 0, lambda t: 0
 
-    sol = robot2R_dynamics_sim(t_span, y0, robot)
+    traj = lambda t: np.array([q1(t), q2(t), q1d(t), q2d(t), q1dd(t), q2dd(t)])
+
+    sim = Simulation(robot, control)
+    sol = sim.dynamics_sim(traj)
     animate(sol, robot)
-    #plot_solution(sol)
+
+    plot_solution(sol)

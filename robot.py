@@ -8,6 +8,8 @@ class Robot2R:
         self._l2 = l2
         self._g  = g
 
+        self.n_joints = 2
+
     def _M(self, q):
         m1, m2 = self._m1, self._m2
 
@@ -52,3 +54,21 @@ class Robot2R:
         p1 = np.array([l1*np.cos(q[0]), l1*np.sin(q[0])])
         p2 = p1 + np.array([l2*np.cos(q[0] + q[1]), l2*np.sin(q[0] + q[1])])
         return np.vstack((p0,p1,p2))
+
+    def inverse_kinematics(self, pos, elbow_up=True):
+        l1l1 = self._l1*self._l1
+        l2l2 = self._l2*self._l2
+        l1l2 = self._l1*self._l2
+
+        x, y = pos[0], pos[1]
+
+        B = np.arccos((l1l1 + l2l2 - x*x - y*y)/(2*l1l2))
+        A = np.arccos((x*x + y*y + l1l1 - l2l2)/(2*self._l1*np.sqrt(x*x + y*y)))
+        S = np.arctan2(y, x)
+
+        sol = None
+        if elbow_up:
+            sol = np.array([S + A, B - np.pi]) 
+        else:
+            sol = np.array([S - A, np.pi - B])
+        return sol
