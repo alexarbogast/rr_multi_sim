@@ -1,12 +1,13 @@
 import numpy as np
 
 class Robot2R:
-    def __init__(self, m1, m2, l1, l2, g=9.81):
+    def __init__(self, m1, m2, l1, l2, g=9.81, base=(0,0)):
         self._m1 = m1
         self._m2 = m2
         self._l1 = l1
         self._l2 = l2
         self._g  = g
+        self._base = base
 
         self.n_joints = 2
 
@@ -50,8 +51,8 @@ class Robot2R:
     def forward_kinematics(self, q):
         l1, l2 = self._l1, self._l2
 
-        p0 = np.array([0, 0])
-        p1 = np.array([l1*np.cos(q[0]), l1*np.sin(q[0])])
+        p0 = np.array(self._base)
+        p1 = np.array([l1*np.cos(q[0]), l1*np.sin(q[0])]) + p0
         p2 = p1 + np.array([l2*np.cos(q[0] + q[1]), l2*np.sin(q[0] + q[1])])
         return np.vstack((p0,p1,p2))
 
@@ -72,3 +73,10 @@ class Robot2R:
         else:
             sol = np.array([S - A, np.pi - B])
         return sol
+
+    def jacobian(self, q):
+        l1, l2 = self._l1, self._l2
+        
+        J = np.array([[-l1*np.sin(q[0])-l2*np.sin(q[0]+q[1]), -l2*np.sin(q[0]+q[1])],
+                      [ l1*np.cos(q[0])+l2*np.cos(q[0]+q[1]),  l2*np.cos(q[0]+q[1])]])
+        return J
