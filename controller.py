@@ -42,6 +42,48 @@ class ComputedTorqueController(Controller):
 
 
 class InverseJacobianController(Controller):
+    def __init__(self, Kp):
+        self._Kp = Kp 
+
+    def step(self, t, state, set_point, robot):
+        """
+        Find control signal for step at time t.
+
+        v = J(q)*u
+        u = Kp*ep + [xd_d; yd_d]
+        
+        Parameters
+        ----------
+        t : float
+            time value
+        state : numpy.ndarray[float]
+            robot2R state = [q1, q2, q1d, q2d]
+        set_point : numpy.ndarray[float]
+            desired position and velocity = [x_d, y_d, xd_d, yd_d]
+        robot : Robot2R
+            a 2R robot object
+
+        Returns
+        -------
+        qd : numpy.ndarray[float]
+            joint velocity
+        """
+
+        *_, p = robot.forward_kinematics(state[:2])
+        ep = set_point[:2] - p
+        u = (self._Kp @ ep) + set_point[2:]
+
+        J = robot.jacobian(state)
+        Jinv = np.linalg.inv(J)
+        qd = Jinv @ u
+        return qd
+
+    
+class TrajectoryController(Controller):
+    def __init__(self, Kp, Kd, Kp_jac):
+        self._ctc = ComputedTorqueController(Kp, Kd)
+        self._ijc = InverseJacobianController(Kp_jac)
+
     def step(self, t, state, set_point, robot):
         """
         Find control signal for step at time t.
@@ -53,23 +95,24 @@ class InverseJacobianController(Controller):
         state : numpy.ndarray[float]
             robot2R state = [q1, q2, q1d, q2d]
         set_point : numpy.ndarray[float]
-            desired velocity = [xd, yd]
+            desired position and velocity = [x_d, y_d, xd_d, yd_d]
         robot : Robot2R
             a 2R robot object
 
         Returns
         -------
-        qd : numpy.ndarray[float]
-            joint velocity
+        tau : float
+            torque for robot joints
         """
 
-        J = robot.jacobian(state)
-        Jinv = np.linalg.inv(J)
-        qd = Jinv @ set_point
-        return qd
+        qd = self._ijc.step(t, state, set_point, robot)
 
-    
-class CombinedController(Controller):
+        ctc_setpoint = np.array([state[0], state[1], qd[0], qd[1]])
+        tau = self._ctc.step(t, state, ctc_setpoint, robot)
+        return tau
+
+
+class CoordinatedController(Controller):
     def __init__(self, Kp, Kd):
         self._ctc = ComputedTorqueController(Kp, Kd)
         self._ijc = InverseJacobianController()
@@ -83,7 +126,7 @@ class CombinedController(Controller):
         t : float
             time value
         state : numpy.ndarray[float]
-            robot2R state = [q1, q2, q1d, q2d]
+            robot2R state = [q1, q2, q1d, q2d, qp, qpd]
         set_point : numpy.ndarray[float]
             desired velocity = [xd, yd]
         robot : Robot2R
