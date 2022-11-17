@@ -28,7 +28,7 @@ def animate2R(sol, robot):
     plt.style.use('dark_background')
     fig, ax = plt.subplots()
     ax.axis('equal')
-    ax.set(xlim=(-3, 3), ylim=(-3, 3))
+    ax.set(xlim=(-2, 2), ylim=(-2, 2))
     
     line, = ax.plot([], [], 'o-', color='#81b1d2',lw=4) 
     trace, = ax.plot([], [], '.-', color='orange', lw=0.5, ms=2)

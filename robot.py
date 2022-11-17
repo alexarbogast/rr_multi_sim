@@ -114,7 +114,8 @@ class Robot2R:
         l2l2 = self._l2*self._l2
         l1l2 = self._l1*self._l2
 
-        x, y = pos[0], pos[1]
+        x = pos[0] - self._base[0]
+        y = pos[1] - self._base[1]
 
         B = np.arccos((l1l1 + l2l2 - x*x - y*y)/(2*l1l2))
         A = np.arccos((x*x + y*y + l1l1 - l2l2)/(2*self._l1*np.sqrt(x*x + y*y)))

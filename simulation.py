@@ -8,7 +8,8 @@ class Simulation2R:
 
     def _sim_step(self, t, state, trajectory):
         # control
-        set_point = trajectory(t)
+        p, v = trajectory(t)
+        set_point = np.concatenate((p, v))
         control_input = self._controller.step(t, state, set_point, self._robot)
 
         # plant
@@ -17,11 +18,11 @@ class Simulation2R:
         return np.concatenate((qd, qdd.T[0]))
 
     def dynamics_sim(self, trajectory=None):
-        t_span = [0, 8]
+        t_span = [trajectory._ti[0], trajectory._ti[-1]]
 
         p0 =  np.array([0, 0])
         if trajectory is not None:
-            p0 = self._robot.inverse_kinematics(trajectory(0)[:2])
+            p0 = self._robot.inverse_kinematics(trajectory(t_span[0])[0])
         y0 = np.concatenate((p0, [0, 0]))
         
         return solve_ivp(self._sim_step, t_span, y0, 
@@ -62,8 +63,11 @@ class SimulationMultiPositioner:
         pos_state = state[8:]
 
         # control
-        set_point1 = trajectories[0](t)
-        set_point2 = trajectories[1](t)
+        p1, v1 = trajectories[0](t)
+        set_point1 = np.concatenate((p1, v1))
+        p2, v2 = trajectories[1](t)
+        set_point2 = np.concatenate((p2, v2))
+
         control_input1 = self._controller[0].step(t, rob1_state, set_point1, self._robots[0])
         control_input2 = self._controller[1].step(t, rob2_state, set_point2, self._robots[1])
 
@@ -80,12 +84,24 @@ class SimulationMultiPositioner:
                                np.array([qpd, qpdd])))
 
     def dynamics_sim(self, trajectories):
-        t_span = [0, 10]
+        t_max = 0
+        for traj in trajectories:
+            t_max = max(t_max, traj._ti[-1])
+        t_span = [0, t_max]
+
+        q0 =  []
+        if trajectories is not None:
+            for rob, traj in zip(self._robots, trajectories):
+                p0 = rob.inverse_kinematics(traj(0)[0])
+                q0.append(np.concatenate((p0, [0, 0])))
+
+        y0 = np.concatenate(q0)
+        y0 = np.concatenate((y0, [0, 0]))
         
-        q1i = np.array([np.pi/3, -2*np.pi/3, 0, 0])
-        q2i = np.array([2*np.pi/3, 2*np.pi/3, 0, 0])
-        qpi = np.array([0, np.pi/2])
-        y0 = np.concatenate((q1i, q2i, qpi))
+        #q1i = np.array([np.pi/3, -2*np.pi/3, 0, 0])
+        #q2i = np.array([2*np.pi/3, 2*np.pi/3, 0, 0])
+        #qpi = np.array([0, np.pi/2])
+        #y0 = np.concatenate((q1i, q2i, qpi))
 
         return solve_ivp(self._sim_step, t_span, y0, dense_output=True,
                          args=[trajectories])
