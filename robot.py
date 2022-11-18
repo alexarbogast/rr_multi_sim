@@ -83,7 +83,7 @@ class Robot2R:
         Returns
         -------
         numpy.ndarray[float]
-            frames [p0, p1, p2]
+            frames [p0, p1, p2] in world frame
         """
 
         l1, l2 = self._l1, self._l2

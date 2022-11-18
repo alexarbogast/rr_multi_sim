@@ -81,6 +81,6 @@ class Trajectory5PtP(Trajectory):
         dir = dir / np.linalg.norm(dir)
 
         bi = self._params[ind - 1]
-        pi = ps + dir*self._s(bi, ti)
+        pi = ps + (pe - ps)*self._s(bi, ti)
         vi = dir * self._sd(bi, ti)
         return pi, vi

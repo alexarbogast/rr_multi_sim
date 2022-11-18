@@ -80,7 +80,7 @@ def animateMulti(sol, robots):
     ani = animation.FuncAnimation(fig, _animate, len(tt), interval=dt * 500, blit=True)
     plt.show()
 
-def animateMultiPos(sol, robots, positioner):
+def animateMultiPos(sol, robots, positioner, path1, path2):
     dt = 0.01
     tt = np.arange(sol.t[0], sol.t[-1], dt)
     state = sol.sol(tt)
@@ -111,7 +111,14 @@ def animateMultiPos(sol, robots, positioner):
     ax.add_patch(circle)
     axis_x, = ax.plot([], [], color='r',lw=2) 
     axis_y, = ax.plot([], [], color='b',lw=2)
-    
+
+    # TEMPORARY
+    paths1, = ax.plot([], [], color='y',lw=2) 
+    rot_paths1 = [np.einsum('ij, kj->ki', Rot(q), path1) for q in qp]
+
+    paths2, = ax.plot([], [], color='g',lw=2) 
+    rot_paths2 = [np.einsum('ij, kj->ki', Rot(q), path2) for q in qp]
+
     def _animate(i):
         p1 = fk1[i]
         line1.set_data(p1[0], p1[1])
@@ -122,7 +129,13 @@ def animateMultiPos(sol, robots, positioner):
         coords = Fpos[i]
         axis_x.set_data([0, coords[0, 0]], [0, coords[1, 0]])
         axis_y.set_data([0, coords[0, 1]], [0, coords[1, 1]])
-        return line1, line2, time_text, axis_x, axis_y
+
+        # TEMPORARY
+        rot_path1 = rot_paths1[i]
+        paths1.set_data(rot_path1.T[0], rot_path1.T[1]) 
+        rot_path2 = rot_paths2[i]
+        paths2.set_data(rot_path2.T[0], rot_path2.T[1]) 
+        return line1, line2, time_text, axis_x, axis_y, paths1, paths2
     
     anim = animation.FuncAnimation(fig, _animate, len(tt), interval=dt * 500, blit=True)
     
