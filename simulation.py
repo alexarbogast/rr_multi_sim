@@ -34,33 +34,9 @@ class SimulationMulti:
         self._robots = robots
         self._controllers = controllers
 
-    def _sim_step(self, t, state):
-        # control
-
-        # plant
-        q1, qd1 = state[:2], state[2:4]
-        q2, qd2 = state[4:6], state[6:]
-        qdd1 = self._robots[0].forward_dynamics(q1, qd1, 0)
-        qdd2 = self._robots[1].forward_dynamics(q2, qd2, 0)
-        return np.concatenate((qd1, qdd1.T[0], qd2, qdd2.T[0]))
-
-    def dynamics_sim(self):
-        t_span = [0, 10]
-        y0 =  np.zeros(8)
-        
-        return solve_ivp(self._sim_step, t_span, y0, dense_output=True)
-
-
-class SimulationMultiPositioner:
-    def __init__(self, robots, rob_controllers, positioner, pos_controller):
-        self._robots = robots
-        self._controller = rob_controllers
-        self._positioner = positioner
-        self._pos_controller = pos_controller
-
     def _sim_step(self, t, state, trajectories):
-        rob1_state, rob2_state = state[:4], state[4:8]
-        pos_state = state[8:]
+        # state = [q11, q21, qd11, qd21, q12, q22, qd12, qd22]
+        rob1_state, rob2_state = state[0:4], state[4:8]
 
         # control
         p1, v1 = trajectories[0](t)
@@ -68,20 +44,15 @@ class SimulationMultiPositioner:
         p2, v2 = trajectories[1](t)
         set_point2 = np.concatenate((p2, v2))
 
-        control_input1 = self._controller[0].step(t, rob1_state, set_point1, self._robots[0])
-        control_input2 = self._controller[1].step(t, rob2_state, set_point2, self._robots[1])
+        control_input1 = self._controllers[0].step(t, rob1_state, set_point1, self._robots[0])
+        control_input2 = self._controllers[1].step(t, rob2_state, set_point2, self._robots[1])
 
         # plant
-        q1, qd1 = rob1_state[:2], rob1_state[2:]
-        q2, qd2 = rob2_state[:2], rob2_state[2:]
-        qp, qpd = pos_state[0], pos_state[1]
-
+        q1, qd1 = state[:2], state[2:4]
+        q2, qd2 = state[4:6], state[6:]
         qdd1 = self._robots[0].forward_dynamics(q1, qd1, control_input1)
         qdd2 = self._robots[1].forward_dynamics(q2, qd2, control_input2)
-        qpdd = self._positioner.forward_dynamics(qp, qpd, 0)
-        return np.concatenate((qd1, qdd1.T[0], 
-                               qd2, qdd2.T[0], 
-                               np.array([qpd, qpdd])))
+        return np.concatenate((qd1, qdd1.T[0], qd2, qdd2.T[0]))
 
     def dynamics_sim(self, trajectories):
         t_max = 0
@@ -94,23 +65,16 @@ class SimulationMultiPositioner:
             for rob, traj in zip(self._robots, trajectories):
                 p0 = rob.inverse_kinematics(traj(0)[0])
                 q0.append(np.concatenate((p0, [0, 0])))
-
         y0 = np.concatenate(q0)
-        y0 = np.concatenate((y0, [0, 0]))
-        
-        #q1i = np.array([np.pi/3, -2*np.pi/3, 0, 0])
-        #q2i = np.array([2*np.pi/3, 2*np.pi/3, 0, 0])
-        #qpi = np.array([0, np.pi/2])
-        #y0 = np.concatenate((q1i, q2i, qpi))
 
         return solve_ivp(self._sim_step, t_span, y0, dense_output=True,
                          args=[trajectories])
 
 
-class SimulationMultiPositioner2:
+class SimulationMultiPositioner:
     def __init__(self, robots, rob_controllers, positioner, pos_controller):
         self._robots = robots
-        self._controller = rob_controllers
+        self._controllers = rob_controllers
         self._positioner = positioner
         self._pos_controller = pos_controller
 
@@ -129,8 +93,8 @@ class SimulationMultiPositioner2:
         # TEMPORARY
         set_pointp = -0.1
 
-        control_input1 = self._controller[0].step(t, rob1_state, set_point1, self._robots[0])
-        control_input2 = self._controller[1].step(t, rob2_state, set_point2, self._robots[1])
+        control_input1 = self._controllers[0].step(t, rob1_state, set_point1, self._robots[0])
+        control_input2 = self._controllers[1].step(t, rob2_state, set_point2, self._robots[1])
         control_inputp = self._pos_controller.step(t, pos_state, set_pointp, self._positioner)
 
         # plant

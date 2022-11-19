@@ -4,6 +4,7 @@ class Controller:
     def step(self, t, state, set_point, robot):
         return np.zeros(robot.n_joints)
 
+
 class ComputedTorqueController(Controller):
     def __init__(self, Kp, Kd):
         self._Kp = Kp
@@ -112,13 +113,12 @@ class TrajectoryController(Controller):
         return tau
 
 
-class CoordinatedRRController(Controller):
-    def __init__(self, Kp, Kd, Kp_jac):
-        self._ctc = ComputedTorqueController(Kp, Kd)
-        self._Kp_jac = Kp_jac
+class CoordInverseJacobianController(Controller):
+    def __init__(self, Kp):
+        self._Kp = Kp
 
     def _get_params(self, q1, q2, qp, robot):
-        """ Returns the robot and positioner jacobians """
+        """ Returns the robot and positioner Jacobians """
 
         l1, l2 = robot._l1, robot._l2
         xb, yb = robot._base
@@ -166,27 +166,53 @@ class CoordinatedRRController(Controller):
 
         Returns
         -------
-        tau : float
-            torque for robot joints
+        qd : numpy.array[float]
+            joint velocity
         """
 
-        qr = state[:2]
-        qp = state[4]
-        Jr, Jp = self._get_params(qr[0], qr[1], qp, robot)
-
+        qr, qp = state[:2], state[4]
         vd = set_point[2:4]
         qpd = set_point[4]
 
-        # inverse jacobian (in pos frame)
-        *_, p_w = robot.forward_kinematics(state[:2])
-        p_w = np.append(p_w, 1)
-        ep = set_point[:2] - (self._Tpw(qp) @ p_w)[:-1]
+        # robot and positioner Jacobians
+        Jr, Jp = self._get_params(qr[0], qr[1], qp, robot)
 
-        uk = self._Kp_jac @ ep + vd
+        *_, pd = robot.forward_kinematics(qr)
+        ep = set_point[:2] - (self._Tpw(qp) @ np.append(pd, 1))[:-1]
+        uk = self._Kp @ ep + vd
         u = np.linalg.inv(Jr) @ (uk - Jp*qpd)
-        qd = u
+        return u
 
-        ctc_setpoint = np.array([qr[0], qr[1], qd[0], qd[1]])
+
+class CoordinatedRRController(Controller):
+    def __init__(self, Kp, Kd, Kp_jac):
+        self._ctc = ComputedTorqueController(Kp, Kd)
+        self._cijc = CoordInverseJacobianController(Kp_jac)
+
+    def step(self, t, state, set_point, robot):
+        """
+        Find control signal for step at time t.
+        
+        Parameters
+        ----------
+        t : float
+            time value
+        state : numpy.ndarray[float]
+            robot2R state = [q1, q2, q1d, q2d, qp, qpd]
+        set_point : numpy.ndarray[float]
+            desired position and velocity = [x_d, y_d, xd_d, yd_d, qpd]
+            in positioner frame
+        robot : Robot2R
+            a 2R robot object
+
+        Returns
+        -------
+        tau : numpy.array[float]
+            torque for robot joints
+        """
+
+        qd = self._cijc.step(t, state, set_point, robot)
+        ctc_setpoint = np.array([state[0], state[1], qd[0], qd[1]])
         tau = self._ctc.step(t, state[:4], ctc_setpoint, robot)
         return tau
 

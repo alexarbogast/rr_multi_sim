@@ -60,13 +60,18 @@ def animateMulti(sol, robots):
     fk1 = [robots[0].forward_kinematics(qq).T for qq in q1]
     fk2 = [robots[1].forward_kinematics(qq).T for qq in q2]
 
+    history1_x, history1_y = deque(maxlen=HISTORY_LENGTH), deque(maxlen=HISTORY_LENGTH)
+    history2_x, history2_y = deque(maxlen=HISTORY_LENGTH), deque(maxlen=HISTORY_LENGTH)
+
     plt.style.use('dark_background')
     fig, ax = plt.subplots()
     ax.axis('equal')
     ax.set(xlim=(-3, 3), ylim=(-3, 3))
 
     line1, = ax.plot([], [], 'o-', color='#81b1d2',lw=3) 
-    line2, = ax.plot([], [], 'o-', color='#81b1d2',lw=3) 
+    line2, = ax.plot([], [], 'o-', color='#81b1d2',lw=3)
+    trace1, = ax.plot([], [], '.-', color='orange', lw=0.5, ms=2)
+    trace2, = ax.plot([], [], '.-', color='orange', lw=0.5, ms=2)
     time_text = ax.text(0, 0, f'time: {tt[0]} s', transform=ax.transAxes)
 
     def _animate(i):
@@ -75,7 +80,14 @@ def animateMulti(sol, robots):
         p2 = fk2[i]
         line2.set_data(p2[0], p2[1])
         time_text.set_text(f'time: {dt*i:0.2f} s')
-        return line1, line2, time_text 
+
+        history1_x.appendleft(p1[0][-1])
+        history1_y.appendleft(p1[1][-1])
+        history2_x.appendleft(p2[0][-1])
+        history2_y.appendleft(p2[1][-1])
+        trace1.set_data(history1_x, history1_y)
+        trace2.set_data(history2_x, history2_y)
+        return line1, line2, trace1, trace2, time_text 
     
     ani = animation.FuncAnimation(fig, _animate, len(tt), interval=dt * 500, blit=True)
     plt.show()
@@ -99,7 +111,7 @@ def animateMultiPos(sol, robots, positioner, path1, path2):
     plt.style.use('dark_background')
     fig, ax = plt.subplots()
     ax.axis('equal')
-    ax.set(xlim=(-5, 5), ylim=(-3, 3))
+    ax.set(xlim=(-3, 3), ylim=(-2, 2))
 
     # initialize robot lines
     line1, = ax.plot([], [], 'o-', color='#81b1d2',lw=3) # robot 1
