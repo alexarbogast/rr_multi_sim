@@ -242,8 +242,126 @@ class PositionerController(Controller):
             torque for robot joints
         """
 
+        # velocity control
         ed = set_point - state[-1]
         u = self._Kd * ed
         tau = robot._I*(u)
 
+        # position control
+        #e = set_point - state[0]
+        #u = self._Kd * e
+        #tau = robot._I*(u)
         return tau
+
+
+class MaxManipulabilityController(Controller):
+    def __init__(self, Kd):
+        self._pc = PositionerController(Kd)
+
+    def _gradient(self, state, robots):
+        r1, r2 = robots[0], robots[1]
+        q2_1, q2_2 = state[1], state[3]
+        
+        del_psi1 = -2*(r1._l1**2)*(r1._l2**2)*np.sin(q2_1)*np.cos(q2_1)
+        del_psi2 = -2*(r2._l1**2)*(r2._l2**2)*np.sin(q2_2)*np.cos(q2_2)
+
+        return del_psi1 + del_psi2
+
+    def _gradient_approx(self, state, robots):
+        r1, r2 = robots[0], robots[1]
+
+
+    def step(self, t, state, robots, positioner):
+        """
+        Find control signal for step at time t.
+
+        This controller adjusts the positioner velocity to maxmimize the 
+        combined manipulability of each robot
+        
+        Parameters
+        ----------
+        t : float
+            time value
+        state : numpy.ndarray[float]
+            state = [q11, q21, qd11, qd21, q12, q22, qd12, qd22, qp, qpd]
+        set_point : float
+            desired velocity = qpd_d
+        robots : Positioner
+            a positioner object
+
+        Returns
+        -------
+        tau : float
+            torque for robot joints
+        """
+        
+        eta = 1.5
+        gradient = self._gradient(state, robots)
+
+        qp_old = state[8]
+        qp_new = qp_old + eta*gradient
+        qp_d = eta*gradient
+        #print(qp_d)
+
+        # position control
+        pos_state = state[8:]
+        tau = self._pc.step(t, pos_state, qp_d, positioner)
+        return tau, qp_d
+
+
+class CenterRobotsController(Controller):
+    def __init__(self, Kd):
+        self._pc = PositionerController(Kd)
+
+    def step(self, t, state, robots, positioner):
+        """
+        Find control signal for step at time t.
+        
+        This adjusts the positioner velocity to keep the robots close to their
+        home positions
+
+        Parameters
+        ----------
+        t : float
+            time value
+        state : numpy.ndarray[float]
+            state = [q11, q21, qd11, qd21, q12, q22, qd12, qd22, qp, qpd]
+        set_point : float
+            desired velocity = qpd_d
+        robots : Positioner
+            a positioner object
+
+        Returns
+        -------
+        tau : float
+            torque for robot joints
+        """
+
+        v_base1 = np.array(robots[0]._base)
+        v_base2 = np.array(robots[1]._base)
+
+        *_, p1 = robots[0].forward_kinematics(state[0:2])
+        *_, p2 = robots[1].forward_kinematics(state[4:6])
+
+        #print(v_base1)
+        #print(p1)
+        #print(v_base2)
+        #print(p2)
+        #print()
+
+        v_base1 = v_base1 / np.linalg.norm(v_base1)
+        v_base2 = v_base2 / np.linalg.norm(v_base2)
+        p1 = p1 / np.linalg.norm(p1)
+        p2 = p2 / np.linalg.norm(p2)
+
+        e1 = np.cross(p1, v_base1)
+        e2 = np.cross(p2, v_base2)
+
+        K = 1
+        e = e1 + e2
+        qp_d = K * e
+
+        # position control
+        pos_state = state[8:]
+        tau = self._pc.step(t, pos_state, qp_d, positioner)
+        return tau, qp_d

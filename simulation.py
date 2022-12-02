@@ -84,18 +84,20 @@ class SimulationMultiPositioner:
         rob1_state = np.concatenate((state[:4], pos_state))
         rob2_state = np.concatenate((state[4:8], pos_state))
 
-        # control
-        p1, v1 = trajectories[0](t)
-        set_point1 = np.concatenate((p1, v1, [-0.1]))
-        p2, v2 = trajectories[1](t)
-        set_point2 = np.concatenate((p2, v2, [-0.1]))
-
         # TEMPORARY
-        set_pointp = -0.1
+        #set_pointp = 2*np.cos(np.pi*t)
+
+        # control
+        control_inputp, set_pointp = self._pos_controller.step(t, state, self._robots, self._positioner)
+
+        p1, v1 = trajectories[0](t)
+        set_point1 = np.concatenate((p1, v1, [set_pointp]))
+        p2, v2 = trajectories[1](t)
+        set_point2 = np.concatenate((p2, v2, [set_pointp]))
 
         control_input1 = self._controllers[0].step(t, rob1_state, set_point1, self._robots[0])
         control_input2 = self._controllers[1].step(t, rob2_state, set_point2, self._robots[1])
-        control_inputp = self._pos_controller.step(t, pos_state, set_pointp, self._positioner)
+        #control_inputp = self._pos_controller.step(t, pos_state, set_pointp, self._positioner)
 
         # plant
         q1, qd1 = rob1_state[:2], rob1_state[2:4]

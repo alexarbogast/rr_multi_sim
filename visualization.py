@@ -5,16 +5,71 @@ from collections import deque
 
 HISTORY_LENGTH = 700
 
-def plot_solution(sol):
+def plot_solution(sol, labels=None):
     t = np.linspace(sol.t[0], sol.t[-1], 5000)
     cont = sol.sol(t)
 
     plt.style.use('dark_background')
     _, ax = plt.subplots()
+
     for c in cont:
         ax.plot(t, c.T)
+    if labels is not None:
+        ax.legend(labels)
+
     ax.set_xlabel('time (s)')
     ax.set_title('Robot Simulation Results')
+    plt.show()
+
+def plot_manipulability(sol, robots):
+    t = np.linspace(sol.t[0], sol.t[-1], 1000)
+    cont = sol.sol(t)
+
+    q1 = cont.T[:, 0:2]
+    q2 = cont.T[:, 4:6]
+
+    J1 = [robots[0].jacobian(q) for q in q1]
+    J2 = [robots[1].jacobian(q) for q in q2]
+
+    u1 = [np.sqrt(np.linalg.det(J @ J.T)) for J in J1]
+    u2 = [np.sqrt(np.linalg.det(J @ J.T)) for J in J2]
+    u_sum = [x + y for x, y in zip(u1, u2)]
+
+    plt.style.use('dark_background')
+    plt.plot(t, u1)
+    plt.plot(t, u2)
+    plt.plot(t, u_sum)
+    plt.show()
+
+def plot_coordinated_error(sol, robots, trajectories):
+    def rotate_point(p, pos_angle):
+        R = np.array([[np.cos(pos_angle),  np.sin(pos_angle)],
+                      [-np.sin(pos_angle),  np.cos(pos_angle)]])
+        return R @ p
+    
+    n = len(robots)
+    assert n == len(trajectories), \
+        'Number of robots and trajectories do not match'
+
+    dt = 0.01
+    tt = np.arange(sol.t[0], sol.t[-1], dt)
+    state = sol.sol(tt)
+    q1, q2, qp = state[:2].T, state[4:6].T, state[8]
+    qs = [q1, q2]
+
+    plt.style.use('dark_background')
+    for i in range(n):
+        p_des = np.array([trajectories[i].get_point(t)[0] for t in tt])
+        #p_act = np.array([robots[i].forward_kinematics(q)[2] for q in qs[i]])
+        p_act = []
+        for q, pos_angle in zip(qs[i], qp):
+            p = robots[i].forward_kinematics(q)[2]
+            p_act.append(rotate_point(p, pos_angle))
+        p_act = np.array(p_act)
+
+        e = np.linalg.norm(p_des - p_act, axis=1)
+        plt.plot(tt, e)
+
     plt.show()
 
 def animate2R(sol, robot):
@@ -151,6 +206,6 @@ def animateMultiPos(sol, robots, positioner, path1, path2):
     
     anim = animation.FuncAnimation(fig, _animate, len(tt), interval=dt * 500, blit=True)
     
-    #writervideo = animation.FFMpegWriter(fps=60)
+    writervideo = animation.FFMpegWriter(fps=120)
     #anim.save('animation3.mp4', writer=writervideo)
     plt.show()
